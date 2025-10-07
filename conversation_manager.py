@@ -4,6 +4,8 @@ import re
 from datetime import datetime
 from typing import Any, Tuple # type hinting
 
+from chat import chat_with_sarvam
+
 DB_FILE = "db.json"
 
 class ConversationManager:
@@ -14,6 +16,14 @@ class ConversationManager:
     def __init__(self, flow_script_path="conversation_flow.json"):
         with open(flow_script_path, 'r') as f:
             self.script = json.load(f)
+        
+        self.roles_list_str = ""
+        try:
+            with open("roles.json", 'r') as f:
+                roles_data = json.load(f)
+                self.roles_list_str = ", ".join(roles_data.keys())
+        except Exception as e:
+            print(f"[ERROR] Could not load roles.json: {e}")
         
         self.flow_order = [
             "askName", "askPincode", "askCity", "askAge", "askGender",
@@ -39,11 +49,11 @@ class ConversationManager:
             return self.script.get("goodbye", "Thank you!")
 
         current_key = self.flow_order[self.current_step]
-        is_valid, normalized_value, error_key = self._validate_and_normalize(user_input, current_key)
+        is_valid, normalized_value, error_message = self._validate_and_normalize(user_input, current_key)
 
         if not is_valid:
-            # If input is invalid, return the specific re-prompt message and do not advance.
-            return self.script.get(error_key, "Please try again.")
+            # If input is invalid
+            return error_message
 
         # If valid, store the normalized data
         storage_key = current_key.replace("ask", "").lower()
@@ -57,133 +67,113 @@ class ConversationManager:
         
         next_key = self.flow_order[self.current_step]
         return self.script[next_key]
-
-    def _validate_and_normalize(self, text: str, key: str) -> Tuple[bool, Any, str]:
-        """
-        Validates input based on the question key.
-        Returns (isValid, normalizedValue, repromptKey).
-        """
-        text = text.lower().strip().rstrip('.')
-
-        if key in ["askAge", "askExperience", "askLastSalary", "askExpectedSalary"]:
-            number = self._text_to_int(text)
-            if number is None:
-                return (False, None, "repromptNumber")
-            
-            # --- ADDED EXPERIENCE VALIDATION ---
-            if key == "askExperience" and not (0 <= number <= 50):
-                return (False, None, "repromptExperience")
-            
-            # --- ADDED AGE VALIDATION ---
-            if key == "askAge":
-                if not (18 <= number <= 80): # Assuming a reasonable age range for job seekers
-                    return (False, None, "repromptAge")
-            # ---------------------------
-            return (True, number, None)
-
-        if key == "askPincode":
-            number = self._text_to_int(text)
-            if number is None or len(str(number)) != 6:
-                return (False, None, "repromptPincode")
-            return (True, number, None)
-            
-        if key == "askGender":
-            if any(word in text for word in ["mail", "male"]):
-                return (True, "Male", None)
-            if any(word in text for word in ["female"]):
-                return (True, "Female", None)
-            if any(word in text for word in ["other"]):
-                return (True, "Other", None)
-            return (False, None, "repromptGender")
-        
-        if key == "askEducation":
-            education_levels = {"10th pass": ["10th", "tenth"], "12th pass": ["12th", "twelfth"], "graduate": ["graduate", "degree"], "post graduate": ["post graduate", "masters"], "other": ["other"]}
-            for level, keywords in education_levels.items():
-                if any(keyword in text for keyword in keywords):
-                    return (True, level.title(), None)
-            return (False, None, "repromptEducation")
-
-        if key == "askTravelDistance":
-            match = re.search(r'(\d+)\s*(to|-)\s*(\d+)', text)
-            if match:
-                return (True, f"{match.group(1)}-{match.group(3)} km", None)
-            
-            # Check for "more than"
-            match_more = re.search(r'(more than|over|greater than)\s*(\d+)', text)
-            if match_more:
-                return (True, f"More than {match_more.group(2)} km", None)
-            
-            match_less = re.search(r'(less than|under|below)\s*(\d+)', text)
-            if match_less:
-                return (True, f"Less than {match_less.group(2)} km", None)
-                
-            return (False, None, "repromptTravel")
-
+    
+    def _get_llm_validation_prompt(self, key: str) -> str:
+        """Returns the system prompt for a specific validation task."""
+        if key == "askName":
+            return """
+            You are a data validation expert. Analyze the user's response to extract a person's full name.
+            If a valid name is found, respond ONLY with `true: <Full Name>`.
+            Example 1: User says 'my name is Vikram Singh'. Respond `true: Vikram Singh`.
+            Example 2: User says 'xoxo'. Respond `true: Xoxo`.
+            If no name can be extracted, or if the input is nonsensical, respond ONLY with `false: That does not sound like a valid name. Please tell me your full name.`.
+            """
+        if key in ["askAge", "askPincode", "askExperience", "askLastSalary", "askExpectedSalary"]:
+            return """
+            You are a data validation expert. Analyze the user's response to extract a single numerical value.
+            Convert spoken numbers, digits, and Indian number formats (lakh, crore) into an integer.
+            If a valid number is found, respond ONLY with `true: <integer>`.
+            Example 1: User says 'pachas hazaar'. Respond `true: 50000`.
+            If no valid number can be extracted, respond ONLY with `false: I did not understand that as a number. Please state the number clearly.`.
+            """
+        if key == "askCity":
+            return """
+            You are a data validation expert for an Indian job portal.
+            Analyze the user's response to identify a single city name in India.
+            If a valid Indian city name is found, respond ONLY with `true: <City Name>`.
+            If no valid city name can be extracted, respond ONLY with `false: That does not seem to be a valid city in India. Please tell me your current city.`.
+            """
         if key == "askRole":
-            roles = ["plumber", "driver", "packer", "mover", "mason", "cook", "cleaner", "painter", "line worker", "clerk", "construction", "welder", "electrician", "security", "guard", "barber", "rider", "delivery"]
-            for role in roles:
-                if role in text:
-                    # Normalize common variations
-                    if role in ["packer", "mover"]: return (True, "Packers & Movers", None)
-                    if role in ["security", "guard"]: return (True, "Security Guard", None)
-                    if role in ["rider", "delivery"]: return (True, "Rider (Delivery)", None)
-                    if role == "construction": return (True, "Construction Worker", None)
-                    return (True, role.title(), None)
-            return (False, None, "repromptRole")
+            return f"""
+            You are a data validation expert for a job portal in India.
+            Analyze the user's stated job role. Normalize it to a standard job title.
+            If the input is a valid job, respond ONLY with `true: <Standard Job Title>`.
+            If the input is not a valid job role, respond ONLY with `false: I did not recognize that as a job role. Please tell me the type of job you are looking for.`.
+            """
+        if key == "askEducation":
+            return """
+            You are a data validation expert. Analyze the user's education level.
+            Normalize it to one of: 10th Pass, 12th Pass, Graduate, Post Graduate, Other.
+            If valid, respond ONLY with `true: <Normalized Level>`.
+            If invalid or unclear, respond ONLY with `false: Please state a valid education level, like 12th pass or graduate.`.
+            """
+        if key == "askTravelDistance":
+            return """
+            You are a data validation expert. Analyze the user's travel distance preference.
+            Extract and normalize the distance.
+            If valid, respond ONLY with `true: <Normalized Distance>`.
+            If invalid or unclear, respond ONLY with `false: I did not understand the distance. Please tell me how far you are willing to travel, for example, 10 to 20 kilometers.`.
+            """
+        return ""
 
-        # For simple text fields, just clean and capitalize
-        return (True, text.title(), None)
-
-    def _text_to_int(self, text: str) -> int | None:
-        """Converts spoken numbers and digits into an integer."""
-        text = text.lower().replace(',', '').strip()
-        
-        # Direct conversion if it's already a number
-        if text.isdigit():
-            return int(text)
-
-        # Handle simple number words
-        num_words = {
-            'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-            'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
-        }
-        if text in num_words:
-            return num_words[text]
-        
-        # Handle cases like "five six triple zero one" -> 560001
-        try:
-            cleaned_text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
-            words = cleaned_text.split()
-            digits = [str(num_words.get(word, word)) for word in words]
-            # Handle 'triple' keyword common in India for numbers
-            final_digits = []
-            i = 0
-            while i < len(digits):
-                if digits[i] == 'triple' and i + 1 < len(digits):
-                    final_digits.extend([digits[i+1]] * 3)
-                    i += 2
-                else:
-                    final_digits.append(digits[i])
-                    i += 1
+    def _validate_and_normalize(self, text: str, key: str) -> Tuple[bool, Any, str | None]:
+        """
+        Validates input using rules for simple types and LLM for complex types.
+        """
+        # --- LLM VALIDATION FOR ALL COMPLEX AND NUMERIC FIELDS ---
+        if key in ["askName", "askRole", "askEducation", "askTravelDistance", "askAge", "askPincode", "askExperience", "askLastSalary", "askExpectedSalary", "askCity"]:
+            system_prompt = self._get_llm_validation_prompt(key)
+            message = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text}
+            ]
+            print(f"[INFO] Using LLM to validate '{key}' for input: '{text}'...")
+            response = chat_with_sarvam(message)
             
-            num_str = "".join(digit for digit in final_digits if digit.isdigit())
-            if num_str:
-                return int(num_str)
-        except Exception:
-            pass # Fallback
+            if response and ':' in response:
+                parts = response.split(':', 1)
+                status = parts[0].strip().lower()
+                value_str = parts[1].strip()
+                
+                if status == 'true':
+                    value = None
+                    # For numeric fields, try to cast to int
+                    if "Pincode" in key or "Age" in key or "Salary" in key or "Experience" in key:
+                        try:
+                            value = int(value_str)
+                        except ValueError:
+                             pass
+                    else:
+                        value = value_str # For other fields, keep as string
 
-        # Handle thousands, lakhs, crores
-        multipliers = {'thousand': 1000, 'lakh': 100000, 'crore': 10000000}
-        parts = text.split()
-        if len(parts) == 2 and parts[1] in multipliers:
-            try:
-                num = float(parts[0]) if '.' in parts[0] else int(parts[0])
-                return int(num * multipliers[parts[1]])
-            except (ValueError, IndexError):
-                return None
+                    if value is not None:
+                        # --- SECONDARY RULE-BASED CHECKS on LLM output ---
+                        if key == "askAge" and not (18 <= value <= 80):
+                            return (False, None, self.script.get("repromptAge"))
+                        if key == "askPincode" and len(str(value)) != 6:
+                            return (False, None, "repromptPincode")
+                        return (True, value, None)
+                else: # status == 'false'
+                    # The LLM gave a specific reason for failure. Use it as the reprompt.
+                    return (False, None, value_str) 
 
-        return None
+            # If LLM fails, returns false, or value is None, use the specific reprompt key
+            reprompt_key = f"reprompt{key.replace('ask', '')}"
+            hardcoded_message = self.script.get(reprompt_key, "I'm sorry, please try that again.")
+            return (False, None, hardcoded_message)
 
+        # --- RULE-BASED VALIDATION FOR SIMPLEST FIELDS ---
+        text_cleaned = text.lower().strip().rstrip('.')
+        
+        if key == "askGender":
+            if any(word in text_cleaned for word in ["mail", "male"]): return (True, "Male", None)
+            if "female" in text_cleaned: return (True, "Female", None)
+            if "other" in text_cleaned: return (True, "Other", None)
+            return (False, None, "repromptGender")
+            
+        # For Name and City
+        return (True, text_cleaned.title(), None)
+    
     def _save_to_db(self):
         print(f"[INFO] Saving user data to {DB_FILE}...")
         self.user_data["submission_timestamp"] = datetime.now().isoformat()

@@ -21,8 +21,8 @@ BLOCK_SIZE = 8000
 DTYPE = 'int16'
 
 # Transcription logic settings
-PAUSE_DURATION_SECONDS = 2.0
-SILENCE_THRESHOLD = 5000  # Adjust this based on your microphone's sensitivity
+PAUSE_DURATION_SECONDS = 1.0
+SILENCE_THRESHOLD = 7000  # Adjust this based on your microphone's sensitivity
 TEMP_AUDIO_FILE = "temp_input.wav"
 
 # --- Global State ---

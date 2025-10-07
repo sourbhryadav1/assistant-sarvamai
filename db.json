@@ -1,44 +1,16 @@
 [
     {
-        "name": "Vikram Singh.",
-        "pincode": "Five six triple zero one.",
-        "city": "Bangalore",
-        "age": "28",
-        "gender": "Mail",
-        "education": "Graduate.",
-        "experience": "Five",
-        "lastsalary": "40000",
-        "expectedsalary": "Fifty thousand",
-        "traveldistance": "30 to 40 kilometers.",
-        "role": "Driver",
-        "submission_timestamp": "2025-10-07T17:20:26.049521"
-    },
-    {
-        "name": "Saurabh",
-        "pincode": 561243,
-        "city": "Delhi",
-        "age": 300,
-        "gender": "Male",
-        "education": "10 Pass",
-        "experience": 3,
-        "lastsalary": 0,
-        "expectedsalary": 40000,
-        "traveldistance": "5 Kilometers",
-        "role": "Driver",
-        "submission_timestamp": "2025-10-07T18:08:15.004215"
-    },
-    {
-        "name": "Saurabh",
-        "pincode": 512306,
-        "city": "Bangalore",
+        "name": "Harshit Tripathi",
+        "pincode": 226012,
+        "city": "Lucknow",
         "age": 21,
         "gender": "Male",
-        "education": "Graduate",
-        "experience": 0,
-        "lastsalary": 0,
-        "expectedsalary": 0,
-        "traveldistance": "Zero. Alright, Ten",
-        "role": "Paint",
-        "submission_timestamp": "2025-10-07T19:24:25.748018"
+        "education": "12th Pass",
+        "experience": 1,
+        "lastsalary": 10000,
+        "expectedsalary": 100000,
+        "traveldistance": "50",
+        "role": "Plumber",
+        "submission_timestamp": "2025-10-07T22:16:11.954733"
     }
 ]
