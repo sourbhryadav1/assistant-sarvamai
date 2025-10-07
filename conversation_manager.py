@@ -87,9 +87,15 @@ class ConversationManager:
         if key in ["askAge", "askPincode", "askExperience", "askLastSalary", "askExpectedSalary"]:
             return """
             You are a data validation expert. Analyze the user's response to extract a single numerical value.
-            Convert spoken numbers, digits, and Indian number formats (lakh, crore) into an integer.
+            Convert spoken numbers, digits, and Indian number formats into an integer.
             If a valid number is found, respond ONLY with `true: <integer>`.
             Example 1: User says 'pachas hazaar'. Respond `true: 50000`.
+            Example 2: User says 'twenty five'. Respond `true: 25`.
+            Example 3: User says '1,20,000'. Respond `true: 120000`.
+            Example 4: User says 'sixteen'. Respond `true: 16`.
+            Example 5: User says '560001'. Respond `true: 560001`.
+            Example 6: User says '2 year of experience'. Respond `true: 2`.
+            Example 7: User says 'I have five years experience'. Respond `true: 5`.
             If no valid number can be extracted, respond ONLY with `false: I did not understand that as a number. Please state the number clearly.`.
             """
         if key == "askCity":
@@ -142,18 +148,6 @@ class ConversationManager:
                 'pa-IN': ['punjabi'],
                 'ta-IN': ['tamil', 'tamizh'],
                 'te-IN': ['telugu'],
-                'as-IN': ['assamese', 'asomiya'],
-                'brx-IN': ['bodo'],
-                'doi-IN': ['dogri'],
-                'kok-IN': ['konkani'],
-                'ks-IN': ['kashmiri'],
-                'mai-IN': ['maithili'],
-                'mni-IN': ['manipuri', 'meiteilon'],
-                'ne-IN': ['nepali'],
-                'sa-IN': ['sanskrit'],
-                'sat-IN': ['santali'],
-                'sd-IN': ['sindhi'],
-                'ur-IN': ['urdu']
             }
             for code, keywords in lang_map.items():
                 if any(keyword in text_lower for keyword in keywords):
@@ -188,10 +182,10 @@ class ConversationManager:
 
                     if value is not None:
                         # --- SECONDARY RULE-BASED CHECKS on LLM output ---
-                        if key == "askAge" and not (18 <= value <= 80):
+                        if key == "askAge" and (value < 18 or value > 80):
                             return (False, None, self._translate_if_needed(self.script.get("repromptAge")))
                         if key == "askPincode" and len(str(value)) != 6:
-                            return (False, None, self.__translate_if_needed(self.script.get("repromptPincode")))
+                            return (False, None, self._translate_if_needed(self.script.get("repromptPincode")))
                         return (True, value, None) 
                 else:
                     return (False, None, self._translate_if_needed(value_str)) # use llm response as reprompt message
@@ -204,8 +198,8 @@ class ConversationManager:
         text_cleaned = text.lower().strip().rstrip('.')
         
         if key == "askGender":
-            if any(word in text_cleaned for word in ["mail", "male"]): return (True, "Male", None)
-            if "female" in text_cleaned: return (True, "Female", None)
+            if any(word in text_cleaned for word in ["mail", "male", 'man', 'boy', 'he']): return (True, "Male", None)
+            if any(word in text_cleaned for word in ["femail", "female", 'woman', 'girl', 'she']): return (True, "Male", None)
             if "other" in text_cleaned: return (True, "Other", None)
             return (False, None, self._translate_if_needed(self.script.get("repromptGender")))
             
