@@ -1,0 +1,23 @@
+{
+  "askName": "What is your full name?",
+  "askPincode": "What is your pincode?",
+  "askCity": "Which city are you in?",
+  "askAge": "What is your age?",
+  "askGender": "What is your gender? You can say Male, Female, or Other.",
+  "askEducation": "What is your highest education level? For example, 10th Pass, 12th Pass, or Graduate.",
+  "askExperience": "How many years of work experience do you have? Please just say the number. Say 0 if you are a fresher.",
+  "askLastSalary": "What was your last salary per month? Please just say the number. Say 0 if you are a fresher.",
+  "askExpectedSalary": "What is your expected salary per month? Please just say the number.",
+  "askTravelDistance": "How far are you willing to travel for work? For example, 10 to 20 kilometers.",
+  "askRole": "Finally, what type of job are you looking for? For example, Plumber, Driver, or Painter.",
+  "welcome": "👋 Welcome to Jobs U P I! We help you find the perfect job. Let's get started!",
+  "goodbye": "Thank you! I have all your details. We will find the best job matches and contact you shortly. Goodbye!",
+  "repromptNumber": "I'm sorry, I didn't understand that. Please provide the answer as a number, like ten thousand or five thousand.",
+  "repromptPincode": "That doesn't seem to be a valid pincode. Please provide a 6-digit number.",
+  "repromptGender": "I didn't catch that. Please say Male, Female, or Other.",
+  "repromptAge": "That doesn't seem like a valid age for work. Please provide an age between 18 and 80.",
+  "repromptExperience": "That doesn't seem like a valid number of years. Please provide a number between 0 and 50.",
+  "repromptEducation": "I didn't quite catch that. Please state your education level, such as 10th Pass, 12th Pass, or Graduate.",
+  "repromptTravel": "Please provide a travel range, for example, 10 to 20 kilometers.",
+  "repromptRole": "I didn't recognize that job role. Please choose a role like Driver, Painter, or Cook."
+}
