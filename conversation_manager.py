@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Tuple # type hinting
 
 from chat import chat_with_sarvam
+from translate import translate_text
 
 DB_FILE = "db.json"
 
@@ -17,16 +18,10 @@ class ConversationManager:
         with open(flow_script_path, 'r') as f:
             self.script = json.load(f)
         
-        self.roles_list_str = ""
-        try:
-            with open("roles.json", 'r') as f:
-                roles_data = json.load(f)
-                self.roles_list_str = ", ".join(roles_data.keys())
-        except Exception as e:
-            print(f"[ERROR] Could not load roles.json: {e}")
+        self.user_language_code = 'en-IN' # Default language
         
         self.flow_order = [
-            "askName", "askPincode", "askCity", "askAge", "askGender",
+            "askLanguage", "askName", "askPincode", "askCity", "askAge", "askGender",
             "askEducation", "askExperience", "askLastSalary",
             "askExpectedSalary", "askTravelDistance", "askRole"
         ]
@@ -52,21 +47,32 @@ class ConversationManager:
         is_valid, normalized_value, error_message = self._validate_and_normalize(user_input, current_key)
 
         if not is_valid:
-            # If input is invalid
             return error_message
 
         # If valid, store the normalized data
         storage_key = current_key.replace("ask", "").lower()
         self.user_data[storage_key] = normalized_value
+
+        if current_key == 'askLanguage':
+            self.user_language_code = normalized_value
+
         self.current_step += 1
 
         if self.current_step >= len(self.flow_order):
             self.is_complete = True
             self._save_to_db()
-            return self.script.get("goodbye", "Thank you!")
+            goodbye_message = self.script.get("goodbye", "Thank you!")
+            return self._translate_if_needed(goodbye_message)
         
         next_key = self.flow_order[self.current_step]
-        return self.script[next_key]
+        next_question = self.script[next_key]
+        return self._translate_if_needed(next_question)
+    
+    def _translate_if_needed(self, text: str) -> str:
+        """Helper function to translate text if user's language is not English."""
+        if self.user_language_code != 'en-IN':
+            return translate_text(text, self.user_language_code)
+        return text
     
     def _get_llm_validation_prompt(self, key: str) -> str:
         """Returns the system prompt for a specific validation task."""
@@ -120,6 +126,40 @@ class ConversationManager:
         """
         Validates input using rules for simple types and LLM for complex types.
         """
+
+        # --- RULE-BASED VALIDATION for Language Selection ---
+        if key == "askLanguage":
+            text_lower = text.lower()
+            lang_map = {
+                'en-IN': ['english', 'angrezi'],
+                'hi-IN': ['hindi'],
+                'bn-IN': ['bengali', 'bangla'],
+                'gu-IN': ['gujarati'],
+                'kn-IN': ['kannada'],
+                'ml-IN': ['malayalam'],
+                'mr-IN': ['marathi'],
+                'od-IN': ['odia', 'oriya'],
+                'pa-IN': ['punjabi'],
+                'ta-IN': ['tamil', 'tamizh'],
+                'te-IN': ['telugu'],
+                'as-IN': ['assamese', 'asomiya'],
+                'brx-IN': ['bodo'],
+                'doi-IN': ['dogri'],
+                'kok-IN': ['konkani'],
+                'ks-IN': ['kashmiri'],
+                'mai-IN': ['maithili'],
+                'mni-IN': ['manipuri', 'meiteilon'],
+                'ne-IN': ['nepali'],
+                'sa-IN': ['sanskrit'],
+                'sat-IN': ['santali'],
+                'sd-IN': ['sindhi'],
+                'ur-IN': ['urdu']
+            }
+            for code, keywords in lang_map.items():
+                if any(keyword in text_lower for keyword in keywords):
+                    return (True, code, None)
+            return (False, None, self.script.get("repromptLanguage"))
+        
         # --- LLM VALIDATION FOR ALL COMPLEX AND NUMERIC FIELDS ---
         if key in ["askName", "askRole", "askEducation", "askTravelDistance", "askAge", "askPincode", "askExperience", "askLastSalary", "askExpectedSalary", "askCity"]:
             system_prompt = self._get_llm_validation_prompt(key)
@@ -149,18 +189,16 @@ class ConversationManager:
                     if value is not None:
                         # --- SECONDARY RULE-BASED CHECKS on LLM output ---
                         if key == "askAge" and not (18 <= value <= 80):
-                            return (False, None, self.script.get("repromptAge"))
+                            return (False, None, self._translate_if_needed(self.script.get("repromptAge")))
                         if key == "askPincode" and len(str(value)) != 6:
-                            return (False, None, "repromptPincode")
-                        return (True, value, None)
-                else: # status == 'false'
-                    # The LLM gave a specific reason for failure. Use it as the reprompt.
-                    return (False, None, value_str) 
+                            return (False, None, self.__translate_if_needed(self.script.get("repromptPincode")))
+                        return (True, value, None) 
+                else:
+                    return (False, None, self._translate_if_needed(value_str)) # use llm response as reprompt message
 
             # If LLM fails, returns false, or value is None, use the specific reprompt key
             reprompt_key = f"reprompt{key.replace('ask', '')}"
-            hardcoded_message = self.script.get(reprompt_key, "I'm sorry, please try that again.")
-            return (False, None, hardcoded_message)
+            return (False, None, self._translate_if_needed(self.script.get(reprompt_key, "Please try again.")))
 
         # --- RULE-BASED VALIDATION FOR SIMPLEST FIELDS ---
         text_cleaned = text.lower().strip().rstrip('.')
@@ -169,7 +207,7 @@ class ConversationManager:
             if any(word in text_cleaned for word in ["mail", "male"]): return (True, "Male", None)
             if "female" in text_cleaned: return (True, "Female", None)
             if "other" in text_cleaned: return (True, "Other", None)
-            return (False, None, "repromptGender")
+            return (False, None, self._translate_if_needed(self.script.get("repromptGender")))
             
         # For Name and City
         return (True, text_cleaned.title(), None)
