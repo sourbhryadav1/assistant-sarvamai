@@ -1,7 +1,6 @@
 # Sarvam AI Multilingual Voice Assistant
 
 An intelligent, multilingual voice assistant built using the Sarvam AI platform. This is not a simple chatbot; it is a sophisticated conversational agent designed to guide a user through a structured data collection process, validate their responses in real-time using an LLM, and save the clean data to a database.  
-The primary use case demonstrated is a job application portal (JobsUPI), but the underlying engine can be easily adapted for any structured data-gathering task, such as lead generation, user onboarding, or customer surveys.
 
 ## Demo
 
